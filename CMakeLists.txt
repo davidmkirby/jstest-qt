@@ -34,6 +34,8 @@ set(SOURCES
     src/widgets/axis_widget.h
     src/widgets/button_widget.cpp
     src/widgets/button_widget.h
+    src/widgets/remap_widget.cpp
+    src/widgets/remap_widget.h
     src/widgets/rudder_widget.cpp
     src/widgets/rudder_widget.h
     src/widgets/throttle_widget.cpp

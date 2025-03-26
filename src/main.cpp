@@ -55,11 +55,22 @@ JoystickGui::showCalibrationDialog()
     if (m_calibration_dialog) {
         m_calibration_dialog->activateWindow();
     } else {
+        // Create as a completely separate window
         m_calibration_dialog = std::make_unique<JoystickCalibrationDialog>(*m_joystick);
-        connect(m_calibration_dialog.get(), &QDialog::finished, this, [this]() {
-            m_calibration_dialog.reset();
-        });
-        m_calibration_dialog->setParent(m_test_dialog.get());
+        
+        // Set explicit window flags to ensure it's a top-level window
+        m_calibration_dialog->setWindowFlags(Qt::Window);
+        
+        // Connect with a custom handler
+        connect(m_calibration_dialog.get(), &QDialog::finished, this, 
+            [this](int) {
+                // Disconnect all connections to this dialog first
+                m_calibration_dialog->disconnect();
+                // Then reset it
+                m_calibration_dialog.reset();
+            }, 
+            Qt::QueuedConnection);
+        
         m_calibration_dialog->show();
     }
 }
@@ -70,11 +81,22 @@ JoystickGui::showMappingDialog()
     if (m_mapping_dialog) {
         m_mapping_dialog->activateWindow();
     } else {
-        m_mapping_dialog = std::make_unique<JoystickMapDialog>(*m_joystick);
-        connect(m_mapping_dialog.get(), &QDialog::finished, this, [this]() {
-            m_mapping_dialog.reset();
-        });
-        m_mapping_dialog->setParent(m_test_dialog.get());
+        // Create as a completely separate window
+        m_mapping_dialog = std::make_unique<JoystickMapDialog>(*m_joystick, nullptr);
+        
+        // Set explicit window flags to ensure it's a top-level window
+        m_mapping_dialog->setWindowFlags(Qt::Window);
+        
+        // Connect with a custom handler
+        connect(m_mapping_dialog.get(), &QDialog::finished, this, 
+            [this](int) {
+                // Disconnect all connections to this dialog first
+                m_mapping_dialog->disconnect();
+                // Then reset it
+                m_mapping_dialog.reset();
+            }, 
+            Qt::QueuedConnection);
+        
         m_mapping_dialog->show();
     }
 }
@@ -105,14 +127,18 @@ JoystickApp::showDevicePropertyDialog(const QString& filename, QWidget* parent)
     } else {
         try {
             std::unique_ptr<Joystick> joystick(new Joystick(filename.toStdString()));
-            std::unique_ptr<JoystickGui> gui(new JoystickGui(std::move(joystick), m_simple_ui, parent));
+            std::shared_ptr<JoystickGui> gui = std::make_shared<JoystickGui>(std::move(joystick), m_simple_ui, nullptr); // Note: parent set to nullptr
 
             JoystickTestDialog* dialog = gui->getTestDialog();
+            dialog->setAttribute(Qt::WA_DeleteOnClose, false); // Prevent auto-delete
+            dialog->setWindowModality(Qt::NonModal); // Make it a non-modal window
+            dialog->show(); // Show it immediately
+
             connect(dialog, &QDialog::finished, this, [this, filename]() {
                 m_joystick_guis.remove(filename);
             });
 
-            m_joystick_guis[filename] = std::move(gui);
+            m_joystick_guis[filename] = gui;
             return dialog;
         } catch (const std::exception& e) {
             QMessageBox::critical(nullptr, "Error", QString("Error: %1").arg(e.what()));

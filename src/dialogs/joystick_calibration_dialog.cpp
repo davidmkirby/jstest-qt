@@ -29,8 +29,8 @@
 #include "joystick.h"
 #include "dialogs/calibrate_maximum_dialog.h"
 
-JoystickCalibrationDialog::JoystickCalibrationDialog(Joystick& joystick_)
-    : QDialog(nullptr),
+JoystickCalibrationDialog::JoystickCalibrationDialog(Joystick& joystick_, QWidget* parent)
+    : QDialog(parent),
       joystick(joystick_),
       label(tr("The <i>center</i> values are the minimum and the maximum values of the deadzone.\n"
                "The <i>min</i> and <i>max</i> values refer to the outer values. You have to unplug\n"
@@ -115,7 +115,8 @@ JoystickCalibrationDialog::JoystickCalibrationDialog(Joystick& joystick_)
     // Configure scroll area
     scroll.setWidget(&axis_table);
     scroll.setWidgetResizable(true);
-    scroll.setPolicy(Qt::ScrollBarPolicy::ScrollBarAsNeeded, Qt::ScrollBarPolicy::ScrollBarAlwaysOn);
+    scroll.setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scroll.setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     scroll.setMinimumHeight(300);
     
     // Add table to frame

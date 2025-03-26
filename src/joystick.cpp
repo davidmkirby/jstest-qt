@@ -34,7 +34,6 @@
 #include <linux/joystick.h>
 #include <QFile>
 #include <QDir>
-#include <QTextCodec>
 
 #include "utils/evdev_helper.h"
 

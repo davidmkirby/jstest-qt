@@ -64,7 +64,7 @@ private:
     QString m_datadir;
     bool m_simple_ui;
 
-    QMap<QString, std::unique_ptr<JoystickGui>> m_joystick_guis;
+    QMap<QString, std::shared_ptr<JoystickGui>> m_joystick_guis;
 
 public:
     JoystickApp(int& argc, char** argv);
