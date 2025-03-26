@@ -25,6 +25,7 @@
 
 #include "main.h"
 #include "joystick.h"
+#include "joystick_factory.h"
 #include "joystick_description.h"
 
 JoystickListDialog::JoystickListDialog(QWidget* parent)
@@ -86,7 +87,8 @@ JoystickListDialog::onRowActivated(const QModelIndex& index)
 void
 JoystickListDialog::onRefreshButton()
 {
-    const std::vector<JoystickDescription>& joysticks = Joystick::getJoysticks();
+    // Get joysticks using the factory, which will use the best backend
+    const std::vector<JoystickDescription>& joysticks = JoystickFactory::getJoysticks();
     
     device_list->clear();
     device_list->setHorizontalHeaderLabels(QStringList() << "Icon" << "Name");
@@ -97,10 +99,14 @@ JoystickListDialog::onRefreshButton()
         QStandardItem* iconItem = new QStandardItem();
         QString iconFilename;
         
-        // Pick appropriate icon
-        if (joystick.name == "Sony PLAYSTATION(R)3 Controller") {
+        // Pick appropriate icon based on device name
+        if (joystick.name.find("PLAYSTATION") != std::string::npos ||
+            joystick.name.find("PS3") != std::string::npos ||
+            joystick.name.find("PS4") != std::string::npos ||
+            joystick.name.find("PS5") != std::string::npos) {
             iconFilename = ":/resources/PS3.png";
-        } else if (joystick.name.find("X-Box") != std::string::npos) {
+        } else if (joystick.name.find("X-Box") != std::string::npos ||
+                   joystick.name.find("Xbox") != std::string::npos) {
             iconFilename = ":/resources/xbox360_small.png";
         } else {
             iconFilename = ":/resources/generic.png";
@@ -117,6 +123,11 @@ JoystickListDialog::onRefreshButton()
             << "Device: " << joystick.filename << "\n"
             << "Axes: " << joystick.axis_count << "\n"
             << "Buttons: " << joystick.button_count;
+        
+        // Add backend information if using libinput
+        if (joystick.filename.find("/sys/") == 0) {
+            out << "\nBackend: libinput";
+        }
         
         textItem->setText(QString::fromStdString(out.str()));
         

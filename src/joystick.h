@@ -42,7 +42,7 @@ public:
         int range_max;
     };
 
-private:
+protected:
     int fd;
 
     std::string filename;
@@ -58,47 +58,52 @@ private:
 
 public:
     Joystick(const std::string& filename);
-    ~Joystick();
+    // Add virtual destructor for inheritance
+    virtual ~Joystick();
 
-    int getFd() const { return fd; }
+    virtual int getFd() const { return fd; }
 
-    void update();
+    virtual void update();
 
-    std::string getFilename() const { return filename; }
-    QString getName() const { return name; }
-    int getAxisCount() const { return axis_count; }
-    int getButtonCount() const { return button_count; }
+    virtual std::string getFilename() const { return filename; }
+    virtual QString getName() const { return name; }
+    virtual int getAxisCount() const { return axis_count; }
+    virtual int getButtonCount() const { return button_count; }
 
-    int getAxisState(int id);
+    virtual int getAxisState(int id);
 
     static std::vector<JoystickDescription> getJoysticks();
 
-    std::vector<CalibrationData> getCalibration();
-    void setCalibration(const std::vector<CalibrationData>& data);
-    void resetCalibration();
+    virtual std::vector<CalibrationData> getCalibration();
+    virtual void setCalibration(const std::vector<CalibrationData>& data);
+    virtual void resetCalibration();
 
     /** Clears all calibration data, note that this will mean raw USB
         input values, not values scaled to -32767/32767 */
-    void clearCalibration();
+    virtual void clearCalibration();
 
-    std::vector<int> getButtonMapping();
-    std::vector<int> getAxisMapping();
+    virtual std::vector<int> getButtonMapping();
+    virtual std::vector<int> getAxisMapping();
 
-    void setButtonMapping(const std::vector<int>& mapping);
-    void setAxisMapping(const std::vector<int>& mapping);
+    virtual void setButtonMapping(const std::vector<int>& mapping);
+    virtual void setAxisMapping(const std::vector<int>& mapping);
 
     /** Corrects calibration data after remaping axes */
-    void correctCalibration(const std::vector<int>& mapping_old, const std::vector<int>& mapping_new);
+    virtual void correctCalibration(const std::vector<int>& mapping_old, const std::vector<int>& mapping_new);
 
     /** Get the evdev that this joystick device is based on. This call
         is just a guess, not guaranteed to be the exact same device, but
         for our uses that should be enough. */
-    std::string getEvdev() const;
+    virtual std::string getEvdev() const;
 
 signals:
     void axisChanged(int number, int value);
     void buttonChanged(int number, bool value);
 
+protected:
+    // Protected constructor for derived classes
+    Joystick();
+    
 private slots:
     void onSocketActivated(int socket);
 

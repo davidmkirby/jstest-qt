@@ -22,6 +22,27 @@
 
 #include <string>
 
+// Define bit manipulation macros for working with input devices
+#ifndef BITS_PER_LONG
+#define BITS_PER_LONG (sizeof(long) * 8)
+#endif
+
+#ifndef NBITS
+#define NBITS(x) ((((x)-1)/BITS_PER_LONG)+1)
+#endif
+
+#ifndef NLONGS
+#define NLONGS(x) (((x) + BITS_PER_LONG - 1) / BITS_PER_LONG)
+#endif
+
+#ifndef BIT_WORD
+#define BIT_WORD(nr) ((nr) / BITS_PER_LONG)
+#endif
+
+#ifndef BIT_MASK
+#define BIT_MASK(nr) (1UL << ((nr) % BITS_PER_LONG))
+#endif
+
 /**
  * Convert an event name to a type/code pair
  * 

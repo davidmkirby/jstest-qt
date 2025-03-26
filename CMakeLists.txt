@@ -17,10 +17,39 @@ set(CMAKE_AUTORCC ON)
 # Find packages
 find_package(Threads REQUIRED)
 
+# Check for libinput support
+find_package(PkgConfig QUIET)
+option(ENABLE_LIBINPUT "Enable libinput support" ON)
+set(HAVE_LIBINPUT OFF)
+
+if(ENABLE_LIBINPUT AND PKG_CONFIG_FOUND)
+    # Check for libudev first, as libinput depends on it
+    pkg_check_modules(LIBUDEV libudev)
+    
+    if(LIBUDEV_FOUND)
+        pkg_check_modules(LIBINPUT libinput)
+        if(LIBINPUT_FOUND)
+            message(STATUS "Building with libinput support")
+            set(HAVE_LIBINPUT ON)
+        else()
+            message(STATUS "libinput not found, building without libinput support")
+        endif()
+    else()
+        message(WARNING "libudev not found, but needed for libinput support. Install systemd-devel or libudev-dev package.")
+    endif()
+else()
+    message(STATUS "Building without libinput support")
+endif()
+
 # Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+
+if(HAVE_LIBINPUT)
+    include_directories(${LIBINPUT_INCLUDE_DIRS} ${LIBUDEV_INCLUDE_DIRS})
+    add_definitions(-DHAVE_LIBINPUT)
+endif()
 
 # Source files
 set(SOURCES
@@ -29,6 +58,8 @@ set(SOURCES
     src/joystick.cpp
     src/joystick.h
     src/joystick_description.h
+    src/joystick_factory.cpp
+    src/joystick_factory.h
     src/widgets/axis_widget.cpp
     src/widgets/axis_widget.h
     src/widgets/button_widget.cpp
@@ -51,16 +82,31 @@ set(SOURCES
     src/dialogs/calibrate_maximum_dialog.h
     src/utils/evdev_helper.cpp
     src/utils/evdev_helper.h
+    src/utils/dialog_helper.h
     resources.qrc
 )
 
-# Create the executable
+# Libinput-specific sources
+if(HAVE_LIBINPUT)
+    list(APPEND SOURCES
+        src/libinput_joystick.cpp
+        src/libinput_joystick.h
+        src/utils/libinput_helper.cpp
+        src/utils/libinput_helper.h
+        src/utils/wayland_helper.h
+    )
+endif()
+
+# Create the main executable
 add_executable(jstest-qt ${SOURCES})
 
-# Removed target compile definitions for QT_QPA_PLATFORM
-# Instead, we set the environment variable at runtime
+# Add definitions for modern Qt usage
+target_compile_definitions(jstest-qt PRIVATE
+    QT_DISABLE_DEPRECATED_BEFORE=0x060000  # Disable deprecated API before Qt 6.0
+    QT_USE_QSTRINGBUILDER                 # More efficient string building
+)
 
-# Link libraries
+# Link libraries for main executable
 target_link_libraries(jstest-qt PRIVATE
     Qt6::Core
     Qt6::Gui
@@ -68,11 +114,13 @@ target_link_libraries(jstest-qt PRIVATE
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
-# Add definitions for modern Qt usage
-target_compile_definitions(jstest-qt PRIVATE
-    QT_DISABLE_DEPRECATED_BEFORE=0x060000  # Disable deprecated API before Qt 6.0
-    QT_USE_QSTRINGBUILDER                 # More efficient string building
-)
+if(HAVE_LIBINPUT)
+    # Important: Order matters! LIBUDEV must come before LIBINPUT
+    target_link_libraries(jstest-qt PRIVATE 
+        ${LIBUDEV_LIBRARIES}
+        ${LIBINPUT_LIBRARIES}
+    )
+endif()
 
 # Install rules
 include(GNUInstallDirs)

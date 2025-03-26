@@ -38,6 +38,18 @@
 
 #include "utils/evdev_helper.h"
 
+// Protected constructor for derived classes
+Joystick::Joystick()
+    : QObject(nullptr),
+      fd(-1),
+      notifier(nullptr)
+{
+    // Initialize with default values
+    // Derived classes should set these appropriately
+    axis_count = 0;
+    button_count = 0;
+}
+
 Joystick::Joystick(const std::string& filename_)
     : QObject(nullptr),
       filename(filename_)

@@ -28,6 +28,7 @@
 #include <QDebug>
 
 #include "joystick.h"
+#include "joystick_factory.h"
 #include "dialogs/joystick_test_dialog.h"
 #include "dialogs/joystick_list_dialog.h"
 #include "dialogs/joystick_map_dialog.h"
@@ -92,8 +93,8 @@ JoystickApp::showDevicePropertyDialog(const QString& filename, QWidget* parent)
             // Add debug output
             qDebug() << "Opening joystick:" << filename;
             
-            // Create joystick
-            std::unique_ptr<Joystick> joystick(new Joystick(filename.toStdString()));
+            // Create joystick using factory - this will automatically select the best backend
+            std::unique_ptr<Joystick> joystick = JoystickFactory::createJoystick(filename.toStdString());
             
             // IMPORTANT: Pass nullptr as parent to ensure it's a top-level window
             std::shared_ptr<JoystickGui> gui = std::make_shared<JoystickGui>(std::move(joystick), m_simple_ui, nullptr);
@@ -141,6 +142,12 @@ JoystickApp::run()
     QCommandLineOption waylandOption("wayland", "Force Wayland platform plugin");
     parser.addOption(waylandOption);
     
+    QCommandLineOption legacyOption("legacy", "Force legacy joystick backend");
+    parser.addOption(legacyOption);
+    
+    QCommandLineOption libinputOption("libinput", "Force libinput backend");
+    parser.addOption(libinputOption);
+    
     QCommandLineOption externalDialogOption("external-dialog", "Launch as an external dialog");
     parser.addOption(externalDialogOption);
     
@@ -161,6 +168,13 @@ JoystickApp::run()
         qputenv("QT_QPA_PLATFORM", "wayland");
     }
     
+    // Set the backend based on command line options
+    if (parser.isSet(legacyOption)) {
+        JoystickFactory::setDefaultBackend(JoystickBackend::LEGACY);
+    } else if (parser.isSet(libinputOption)) {
+        JoystickFactory::setDefaultBackend(JoystickBackend::LIBINPUT);
+    }
+    
     // Handle external dialog requests
     if (parser.isSet("external-dialog")) {
         QStringList args = parser.positionalArguments();
@@ -169,7 +183,7 @@ JoystickApp::run()
             QString devicePath = args[1];
             
             try {
-                std::unique_ptr<Joystick> joystick(new Joystick(devicePath.toStdString()));
+                std::unique_ptr<Joystick> joystick = JoystickFactory::createJoystick(devicePath.toStdString());
                 
                 if (dialogType == "mapping") {
                     JoystickMapDialog dialog(*joystick);
