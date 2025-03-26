@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/">
+        <file>resources/generic.png</file>
+        <file>resources/xbox360_small.png</file>
+        <file>resources/PS3.png</file>
+    </qresource>
+</RCC>
