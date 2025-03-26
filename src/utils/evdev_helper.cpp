@@ -19,7 +19,8 @@
 
 #include "utils/evdev_helper.h"
 
-#include <X11/Xlib.h>
+#include <QKeySequence>
+#include <QGuiApplication>
 #include <linux/input.h>
 #include <iostream>
 #include <sstream>
@@ -198,71 +199,82 @@ public:
     }
 } evdev_btn_names;
 
-class Keysym2Keycode
-{
-public:
-    // Map KeySym to kernel keycode
-    std::map<KeySym, int> mapping;
+// Qt-based implementation to replace X11-specific code
+class KeycodeMapper {
+private:
+    std::map<QString, int> keymap;
 
-    Keysym2Keycode()
-    {
-        Display* dpy = XOpenDisplay(NULL);
-        if (!dpy)
-        {
-            throw std::runtime_error("Keysym2Keycode: Couldn't open X11 display");
+public:
+    KeycodeMapper() {
+        // Map common key names to Linux input keycodes
+        // This is a simplified mapping and may need expansion
+        keymap["space"] = KEY_SPACE;
+        keymap["escape"] = KEY_ESC;
+        keymap["return"] = KEY_ENTER;
+        keymap["tab"] = KEY_TAB;
+        keymap["backspace"] = KEY_BACKSPACE;
+        keymap["control"] = KEY_LEFTCTRL;
+        keymap["shift"] = KEY_LEFTSHIFT;
+        keymap["alt"] = KEY_LEFTALT;
+        keymap["meta"] = KEY_LEFTMETA;
+        
+        // Add letter keys
+        for (int i = 0; i < 26; i++) {
+            QString key = QString(QChar('a' + i));
+            keymap[key] = KEY_A + i;
         }
-        else
-        {
-            process_keymap(dpy);
-            XCloseDisplay(dpy);
+        
+        // Add number keys
+        for (int i = 0; i < 10; i++) {
+            QString key = QString::number(i);
+            keymap[key] = KEY_0 + i;
         }
+        
+        // Add function keys
+        for (int i = 1; i <= 12; i++) {
+            QString key = QString("f%1").arg(i);
+            keymap[key] = KEY_F1 + (i - 1);
+        }
+
+        // Add navigation keys
+        keymap["up"] = KEY_UP;
+        keymap["down"] = KEY_DOWN;
+        keymap["left"] = KEY_LEFT;
+        keymap["right"] = KEY_RIGHT;
+        keymap["home"] = KEY_HOME;
+        keymap["end"] = KEY_END;
+        keymap["pageup"] = KEY_PAGEUP;
+        keymap["pagedown"] = KEY_PAGEDOWN;
+        keymap["insert"] = KEY_INSERT;
+        keymap["delete"] = KEY_DELETE;
     }
 
-    void process_keymap(Display* dpy)
-    {
-        int min_keycode, max_keycode;
-        XDisplayKeycodes(dpy, &min_keycode, &max_keycode);
-
-        int num_keycodes = max_keycode - min_keycode + 1;
-        int keysyms_per_keycode;
-        KeySym* keymap = XGetKeyboardMapping(dpy, min_keycode,
-                                            num_keycodes,
-                                            &keysyms_per_keycode);
-
-        for(int i = 0; i < num_keycodes; ++i)
-        {
-            if (keymap[i*keysyms_per_keycode] != NoSymbol)
-            {
-                KeySym keysym = keymap[i*keysyms_per_keycode];
-                // Store the mapping, with the keycode offset by min_keycode
-                mapping[keysym] = i + min_keycode;
-            }
+    int getKeycode(const QString& keyName) {
+        QString lowerKey = keyName.toLower();
+        auto it = keymap.find(lowerKey);
+        if (it != keymap.end()) {
+            return it->second;
         }
-
-        XFree(keymap);
+        return -1; // Key not found
     }
 };
 
-int xkeysym2keycode(const std::string& name)
-{
-    static Keysym2Keycode sym2code;
+// Global instance
+static KeycodeMapper g_keycodeMapper;
 
-    KeySym keysym = XStringToKeysym(name.substr(3).c_str());
-
-    if (keysym == NoSymbol)
-    {
-        throw std::runtime_error("xkeysym2keycode: Couldn't convert name '" + name + "' to xkeysym");
+int qt_keysym2keycode(const std::string& name) {
+    if (name.length() <= 3) {
+        return -1;
     }
-
-    std::map<KeySym, int>::iterator i = sym2code.mapping.find(keysym);
-    if (i == sym2code.mapping.end())
-    {
-        throw std::runtime_error("xkeysym2keycode: Couldn't convert xkeysym '" + name + "' to evdev keycode");
+    
+    QString keyName = QString::fromStdString(name.substr(3));
+    int keycode = g_keycodeMapper.getKeycode(keyName);
+    
+    if (keycode == -1) {
+        throw std::runtime_error("qt_keysym2keycode: Couldn't convert name '" + name + "' to keycode");
     }
-    else
-    {
-        return i->second;
-    }
+    
+    return keycode;
 }
 
 bool str2event(const std::string& name, int& type, int& code)
@@ -288,7 +300,7 @@ bool str2event(const std::string& name, int& type, int& code)
     else if (name.compare(0, 2, "XK") == 0)
     {
         type = EV_KEY;
-        code = xkeysym2keycode(name);
+        code = qt_keysym2keycode(name);
         return true;
     }
     else if (name.compare(0, 2, "JS") == 0)

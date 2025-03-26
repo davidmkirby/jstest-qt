@@ -24,12 +24,14 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QMessageBox>
+#include <QProcess>
 
 #include "joystick.h"
 #include "dialogs/joystick_test_dialog.h"
 #include "dialogs/joystick_list_dialog.h"
 #include "dialogs/joystick_map_dialog.h"
 #include "dialogs/joystick_calibration_dialog.h"
+#include "utils/dialog_helper.h"
 
 // Static member initialization
 JoystickApp* JoystickApp::m_instance = nullptr;
@@ -37,9 +39,7 @@ JoystickApp* JoystickApp::m_instance = nullptr;
 JoystickGui::JoystickGui(std::unique_ptr<Joystick> joystick, bool simple_ui, QWidget* parent) :
     QObject(nullptr),
     m_joystick(std::move(joystick)),
-    m_test_dialog(),
-    m_mapping_dialog(),
-    m_calibration_dialog()
+    m_test_dialog()
 {
     m_test_dialog = std::make_unique<JoystickTestDialog>(*this, *m_joystick, simple_ui);
     if (parent) {
@@ -52,53 +52,15 @@ JoystickGui::JoystickGui(std::unique_ptr<Joystick> joystick, bool simple_ui, QWi
 void
 JoystickGui::showCalibrationDialog()
 {
-    if (m_calibration_dialog) {
-        m_calibration_dialog->activateWindow();
-    } else {
-        // Create as a completely separate window
-        m_calibration_dialog = std::make_unique<JoystickCalibrationDialog>(*m_joystick);
-        
-        // Set explicit window flags to ensure it's a top-level window
-        m_calibration_dialog->setWindowFlags(Qt::Window);
-        
-        // Connect with a custom handler
-        connect(m_calibration_dialog.get(), &QDialog::finished, this, 
-            [this](int) {
-                // Disconnect all connections to this dialog first
-                m_calibration_dialog->disconnect();
-                // Then reset it
-                m_calibration_dialog.reset();
-            }, 
-            Qt::QueuedConnection);
-        
-        m_calibration_dialog->show();
-    }
+    // Instead of creating a dialog directly, launch it in a separate process
+    DialogManager::showCalibrationDialog(QString::fromStdString(m_joystick->getFilename()));
 }
 
 void
 JoystickGui::showMappingDialog()
 {
-    if (m_mapping_dialog) {
-        m_mapping_dialog->activateWindow();
-    } else {
-        // Create as a completely separate window
-        m_mapping_dialog = std::make_unique<JoystickMapDialog>(*m_joystick, nullptr);
-        
-        // Set explicit window flags to ensure it's a top-level window
-        m_mapping_dialog->setWindowFlags(Qt::Window);
-        
-        // Connect with a custom handler
-        connect(m_mapping_dialog.get(), &QDialog::finished, this, 
-            [this](int) {
-                // Disconnect all connections to this dialog first
-                m_mapping_dialog->disconnect();
-                // Then reset it
-                m_mapping_dialog.reset();
-            }, 
-            Qt::QueuedConnection);
-        
-        m_mapping_dialog->show();
-    }
+    // Instead of creating a dialog directly, launch it in a separate process
+    DialogManager::showMappingDialog(QString::fromStdString(m_joystick->getFilename()));
 }
 
 JoystickApp::JoystickApp(int& argc, char** argv) :
@@ -110,6 +72,12 @@ JoystickApp::JoystickApp(int& argc, char** argv) :
     m_instance = this;
     setApplicationName("jstest-qt");
     setApplicationVersion("0.1.1");
+    
+    // Set environment variables for Wayland
+    // Only set the platform if not already specified
+    if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) {
+        qputenv("QT_QPA_PLATFORM", "wayland");
+    }
 }
 
 JoystickApp::~JoystickApp()
@@ -161,6 +129,12 @@ JoystickApp::run()
     QCommandLineOption datadirOption(QStringList() << "datadir", "Load application data from DIR", "dir");
     parser.addOption(datadirOption);
     
+    QCommandLineOption waylandOption("wayland", "Force Wayland platform plugin");
+    parser.addOption(waylandOption);
+    
+    QCommandLineOption externalDialogOption("external-dialog", "Launch as an external dialog");
+    parser.addOption(externalDialogOption);
+    
     parser.process(*this);
     
     if (parser.isSet(simpleOption)) {
@@ -172,6 +146,36 @@ JoystickApp::run()
         if (!m_datadir.endsWith('/')) {
             m_datadir += '/';
         }
+    }
+    
+    if (parser.isSet(waylandOption)) {
+        qputenv("QT_QPA_PLATFORM", "wayland");
+    }
+    
+    // Handle external dialog requests
+    if (parser.isSet("external-dialog")) {
+        QStringList args = parser.positionalArguments();
+        if (args.size() >= 2) {
+            QString dialogType = args[0];
+            QString devicePath = args[1];
+            
+            try {
+                std::unique_ptr<Joystick> joystick(new Joystick(devicePath.toStdString()));
+                
+                if (dialogType == "mapping") {
+                    JoystickMapDialog dialog(*joystick);
+                    return dialog.exec();
+                } 
+                else if (dialogType == "calibration") {
+                    JoystickCalibrationDialog dialog(*joystick);
+                    return dialog.exec();
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "Error: " << e.what() << std::endl;
+                return EXIT_FAILURE;
+            }
+        }
+        return EXIT_FAILURE;
     }
     
     QStringList args = parser.positionalArguments();
@@ -203,6 +207,11 @@ JoystickApp::run()
 int main(int argc, char** argv)
 {
     try {
+        // Set environment variables before QApplication is constructed
+        if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) {
+            qputenv("QT_QPA_PLATFORM", "wayland");
+        }
+        
         JoystickApp app(argc, argv);
         return app.run();
     } catch (const std::exception& e) {

@@ -15,12 +15,10 @@ set(CMAKE_AUTOUIC ON)
 
 # Find packages
 find_package(Threads REQUIRED)
-find_package(X11 REQUIRED)
 
 # Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${X11_INCLUDE_DIRS}
 )
 
 # Source files
@@ -58,16 +56,20 @@ set(SOURCES
 # Create the executable
 add_executable(jstest-qt ${SOURCES})
 
+# Target compile definitions for Wayland support
+target_compile_definitions(jstest-qt PRIVATE QT_QPA_PLATFORM=wayland)
+
 # Link libraries
 target_link_libraries(jstest-qt PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
     ${CMAKE_THREAD_LIBS_INIT}
-    ${X11_LIBRARIES}
 )
 
 # Install rules
+include(GNUInstallDirs)
+
 install(TARGETS jstest-qt
     RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR})
 

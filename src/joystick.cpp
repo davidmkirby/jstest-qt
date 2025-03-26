@@ -129,6 +129,7 @@ Joystick::getJoysticks()
 {
     std::vector<JoystickDescription> joysticks;
 
+    // Traditional method - try the joystick devices directly
     for(int i = 0; i < 32; ++i)
     {
         try
@@ -150,6 +151,103 @@ Joystick::getJoysticks()
         catch(std::exception& err)
         {
             // ok
+        }
+    }
+
+    // If no joysticks found using the traditional method, try alternative detection
+    if (joysticks.empty())
+    {
+        // First try with evdev directly
+        QDir evdevDir("/dev/input");
+        QStringList filters;
+        filters << "event*";
+        evdevDir.setNameFilters(filters);
+        QStringList eventDevices = evdevDir.entryList();
+        
+        for (const QString& eventDevice : eventDevices)
+        {
+            QString fullPath = evdevDir.filePath(eventDevice);
+            int fd = open(fullPath.toStdString().c_str(), O_RDONLY | O_NONBLOCK);
+            
+            if (fd >= 0)
+            {
+                uint8_t evbit[EV_MAX/8 + 1];
+                memset(evbit, 0, sizeof(evbit));
+                
+                if (ioctl(fd, EVIOCGBIT(0, sizeof(evbit)), evbit) >= 0)
+                {
+                    // Check if this device has joystick-like capabilities
+                    if ((evbit[EV_ABS/8] & (1 << (EV_ABS % 8))) &&
+                        (evbit[EV_KEY/8] & (1 << (EV_KEY % 8))))
+                    {
+                        // Looks like it might be a joystick - get more information
+                        char name[256] = "Unknown";
+                        if (ioctl(fd, EVIOCGNAME(sizeof(name)), name) >= 0)
+                        {
+                            // Get axis and button counts
+                            uint8_t absbit[ABS_MAX/8 + 1];
+                            uint8_t keybit[KEY_MAX/8 + 1];
+                            memset(absbit, 0, sizeof(absbit));
+                            memset(keybit, 0, sizeof(keybit));
+                            
+                            ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(absbit)), absbit);
+                            ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keybit)), keybit);
+                            
+                            // Count axes and buttons
+                            int axis_count = 0;
+                            for (int i = 0; i < ABS_MAX; i++) {
+                                if (absbit[i/8] & (1 << (i % 8))) {
+                                    axis_count++;
+                                }
+                            }
+                            
+                            int button_count = 0;
+                            for (int i = BTN_JOYSTICK; i < KEY_MAX; i++) {
+                                if (keybit[i/8] & (1 << (i % 8))) {
+                                    button_count++;
+                                }
+                            }
+                            
+                            if (axis_count > 0 && button_count > 0) {
+                                // Transform evdev path to joystick path if possible
+                                QDir jsDevDir("/dev/input");
+                                QString joystickPath;
+                                
+                                // Find corresponding js device by matching device name
+                                for (int i = 0; i < 32; i++) {
+                                    QString jsPath = QString("js%1").arg(i);
+                                    if (jsDevDir.exists(jsPath)) {
+                                        QString fullJsPath = jsDevDir.filePath(jsPath);
+                                        int js_fd = open(fullJsPath.toStdString().c_str(), O_RDONLY);
+                                        if (js_fd >= 0) {
+                                            char js_name[256] = "";
+                                            if (ioctl(js_fd, JSIOCGNAME(sizeof(js_name)), js_name) >= 0) {
+                                                if (strcmp(name, js_name) == 0) {
+                                                    joystickPath = fullJsPath;
+                                                    close(js_fd);
+                                                    break;
+                                                }
+                                            }
+                                            close(js_fd);
+                                        }
+                                    }
+                                }
+                                
+                                // If no matching js device found, use the event device
+                                if (joystickPath.isEmpty()) {
+                                    joystickPath = fullPath;
+                                }
+                                
+                                joysticks.push_back(JoystickDescription(joystickPath.toStdString(),
+                                                                      name,
+                                                                      axis_count,
+                                                                      button_count));
+                            }
+                        }
+                    }
+                }
+                close(fd);
+            }
         }
     }
 
