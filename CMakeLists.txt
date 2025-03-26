@@ -11,7 +11,8 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
 # Enable automoc for Qt
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
-set(CMAKE_AUTOUIC ON)
+# We're not using .ui files, so we can disable AUTOUIC
+# set(CMAKE_AUTOUIC ON)
 
 # Find packages
 find_package(Threads REQUIRED)
@@ -56,8 +57,8 @@ set(SOURCES
 # Create the executable
 add_executable(jstest-qt ${SOURCES})
 
-# Target compile definitions for Wayland support
-target_compile_definitions(jstest-qt PRIVATE QT_QPA_PLATFORM=wayland)
+# Removed target compile definitions for QT_QPA_PLATFORM
+# Instead, we set the environment variable at runtime
 
 # Link libraries
 target_link_libraries(jstest-qt PRIVATE
@@ -65,6 +66,12 @@ target_link_libraries(jstest-qt PRIVATE
     Qt6::Gui
     Qt6::Widgets
     ${CMAKE_THREAD_LIBS_INIT}
+)
+
+# Add definitions for modern Qt usage
+target_compile_definitions(jstest-qt PRIVATE
+    QT_DISABLE_DEPRECATED_BEFORE=0x060000  # Disable deprecated API before Qt 6.0
+    QT_USE_QSTRINGBUILDER                 # More efficient string building
 )
 
 # Install rules

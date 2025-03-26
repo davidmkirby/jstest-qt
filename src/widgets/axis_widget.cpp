@@ -20,6 +20,7 @@
 #include "widgets/axis_widget.h"
 
 #include <QPainter>
+#include <QPainterPath>
 #include <sstream>
 #include <iomanip>
 
@@ -28,6 +29,13 @@ AxisWidget::AxisWidget(int width, int height, bool show_values_, QWidget* parent
       x(0), y(0), raw_x(0), raw_y(0), show_values(show_values_)
 {
     setFixedSize(width, height);
+    
+    // Set widget attributes for better rendering on Wayland
+    setAttribute(Qt::WA_OpaquePaintEvent, false);
+    setAttribute(Qt::WA_TranslucentBackground, false);
+    
+    // Use a proper size policy
+    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 }
 
 void
@@ -45,16 +53,20 @@ AxisWidget::paintEvent(QPaintEvent* event)
     
     painter.translate(5, 5);
     
-    // Outer Rectangle
+    // Outer Rectangle - use QPainterPath for better Qt6 rendering
+    QPainterPath rectPath;
+    rectPath.addRect(0, 0, w, h);
     painter.setPen(Qt::black);
-    painter.drawRect(0, 0, w, h);
+    painter.drawPath(rectPath);
     
-    // BG Circle
+    // BG Circle - use QPainterPath for better Qt6 rendering
+    QPainterPath circlePath;
+    circlePath.addEllipse(w/2 - w/2, h/2 - w/2, w, w);
     painter.setPen(Qt::NoPen);
     painter.setBrush(QBrush(QColor(0, 0, 0, 25)));
-    painter.drawEllipse(w/2 - w/2, h/2 - w/2, w, w);
+    painter.drawPath(circlePath);
     
-    // Cross
+    // Cross - keep simple line drawing for these thin lines
     painter.setPen(QPen(QColor(0, 0, 0, 128), 0.5));
     painter.drawLine(w/2, 0, w/2, h);
     painter.drawLine(0, h/2, w, h/2);
@@ -69,25 +81,31 @@ AxisWidget::paintEvent(QPaintEvent* event)
         std::ostringstream value_text;
         value_text << "X: " << std::setw(6) << raw_x << " Y: " << std::setw(6) << raw_y;
         
-        QFont monospaceFont("Monospace");
+        // Use system font for better scaling on HiDPI displays
+        QFont monospaceFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
         monospaceFont.setPointSize(10);
         painter.setFont(monospaceFont);
         
         QFontMetrics fm(monospaceFont);
-        QRect textRect = fm.boundingRect(QString::fromStdString(value_text.str()));
+        QString valueString = QString::fromStdString(value_text.str());
+        QRect textRect = fm.boundingRect(valueString);
         
         // Text background for better readability
         painter.setPen(Qt::NoPen);
         painter.setBrush(QBrush(QColor(255, 255, 255, 179)));
-        painter.drawRect(w/2 - textRect.width()/2 - 2, 
+        
+        // Use QPainterPath for text background
+        QPainterPath textBgPath;
+        textBgPath.addRect(w/2 - textRect.width()/2 - 2, 
                          h - textRect.height() - 4,
                          textRect.width() + 4,
                          textRect.height() + 2);
+        painter.drawPath(textBgPath);
         
-        // Draw text
+        // Draw text - calculate position with Qt6-friendly approach
         painter.setPen(Qt::black);
-        painter.drawText(w/2 - textRect.width()/2, h - 2, 
-                        QString::fromStdString(value_text.str()));
+        painter.drawText(QPointF(w/2 - textRect.width()/2, h - 4),
+                         valueString);
     }
 }
 

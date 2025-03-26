@@ -20,6 +20,7 @@
 #include "widgets/button_widget.h"
 
 #include <QPainter>
+#include <QPainterPath>
 
 ButtonWidget::ButtonWidget(int width, int height, const QString& name_, QWidget* parent)
     : QWidget(parent),
@@ -27,6 +28,13 @@ ButtonWidget::ButtonWidget(int width, int height, const QString& name_, QWidget*
       down(false)
 {
     setFixedSize(width, height);
+    
+    // Set widget attributes for better rendering on Wayland
+    setAttribute(Qt::WA_OpaquePaintEvent, false);
+    setAttribute(Qt::WA_TranslucentBackground, false);
+    
+    // Use a proper size policy
+    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 }
 
 void
@@ -42,14 +50,29 @@ ButtonWidget::paintEvent(QPaintEvent* event)
     
     painter.translate(5, 5);
     
-    painter.setPen(Qt::black);
-    painter.drawRect(0, 0, w, h);
+    // Create a path for the button rectangle
+    QPainterPath rectPath;
+    rectPath.addRect(0, 0, w, h);
     
+    // Draw button outline
+    painter.setPen(Qt::black);
+    
+    // Fix: Create proper QBrush object instead of using Qt::black directly
     if (down) {
-        painter.setBrush(Qt::black);
-        painter.drawRect(0, 0, w, h);
-        painter.setPen(Qt::white);
+        painter.setBrush(QBrush(Qt::black));
+    } else {
+        painter.setBrush(Qt::NoBrush);
     }
+    
+    painter.drawPath(rectPath);
+    
+    // Set text color based on button state
+    painter.setPen(down ? Qt::white : Qt::black);
+    
+    // Use system font for better scaling on HiDPI displays
+    QFont font = painter.font();
+    font.setPointSize(10);
+    painter.setFont(font);
     
     // Center the text
     QFontMetrics fm = painter.fontMetrics();

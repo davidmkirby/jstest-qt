@@ -20,6 +20,7 @@
 #include "widgets/throttle_widget.h"
 
 #include <QPainter>
+#include <QPainterPath>
 
 ThrottleWidget::ThrottleWidget(int width, int height, bool invert_, QWidget* parent)
     : QWidget(parent),
@@ -27,6 +28,13 @@ ThrottleWidget::ThrottleWidget(int width, int height, bool invert_, QWidget* par
       pos(0.0)
 {
     setFixedSize(width, height);
+    
+    // Set widget attributes for better rendering on Wayland
+    setAttribute(Qt::WA_OpaquePaintEvent, false);
+    setAttribute(Qt::WA_TranslucentBackground, false);
+    
+    // Use a proper size policy
+    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 }
 
 void
@@ -45,14 +53,19 @@ ThrottleWidget::paintEvent(QPaintEvent* event)
     painter.translate(5, 5);
     
     // Outer Rectangle
+    QPainterPath rectPath;
+    rectPath.addRect(0, 0, w, h);
     painter.setPen(Qt::black);
-    painter.drawRect(0, 0, w, h);
+    painter.drawPath(rectPath);
     
     // Fill rectangle based on position
     int dh = h * p;
     painter.setBrush(Qt::black);
     painter.setPen(Qt::NoPen);
-    painter.drawRect(0, h - dh, w, dh);
+    
+    QPainterPath fillPath;
+    fillPath.addRect(0, h - dh, w, dh);
+    painter.drawPath(fillPath);
 }
 
 void

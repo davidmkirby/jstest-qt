@@ -26,6 +26,9 @@
 #include "main.h"
 #include "joystick.h"
 #include "widgets/button_widget.h"
+#include "widgets/axis_widget.h"
+#include "widgets/rudder_widget.h"
+#include "widgets/throttle_widget.h"
 
 JoystickTestDialog::JoystickTestDialog(JoystickGui& gui, Joystick& joystick_, bool simple_ui)
     : QDialog(nullptr),
@@ -33,13 +36,14 @@ JoystickTestDialog::JoystickTestDialog(JoystickGui& gui, Joystick& joystick_, bo
       joystick(joystick_),
       m_simple_ui(simple_ui),
       label("<b>" + joystick.getName() + "</b><br>Device: " + QString::fromStdString(joystick.getFilename())),
-      stick1_widget(128, 128),
-      stick2_widget(128, 128),
-      stick3_widget(128, 128),
-      rudder_widget(128, 32),
-      throttle_widget(32, 128),
-      left_trigger_widget(32, 128, true),
-      right_trigger_widget(32, 128, true)
+      // Initialize widget pointers
+      stick1_widget(new AxisWidget(128, 128)),
+      stick2_widget(new AxisWidget(128, 128)),
+      stick3_widget(new AxisWidget(128, 128)),
+      rudder_widget(new RudderWidget(128, 32)),
+      throttle_widget(new ThrottleWidget(32, 128)),
+      left_trigger_widget(new ThrottleWidget(32, 128, true)),
+      right_trigger_widget(new ThrottleWidget(32, 128, true))
 {
     setWindowTitle(joystick_.getName());
     setWindowIcon(QIcon(":/resources/generic.png"));
@@ -139,9 +143,9 @@ JoystickTestDialog::JoystickTestDialog(JoystickGui& gui, Joystick& joystick_, bo
     
     // Always show main stick widget for first two axes if device has at least 2 axes
     if (has_at_least_two_axes) {
-        stick_hbox.addWidget(&stick1_widget, 1, Qt::AlignCenter);
-        raw_value_callbacks[0] = [this](int val) { stick1_widget.setRawX(val); };
-        raw_value_callbacks[1] = [this](int val) { stick1_widget.setRawY(val); };
+        stick_hbox.addWidget(stick1_widget, 1, Qt::AlignCenter);
+        raw_value_callbacks[0] = [this](int val) { stick1_widget->setRawX(val); };
+        raw_value_callbacks[1] = [this](int val) { stick1_widget->setRawY(val); };
     }
     
     // Continue with the regular joystick type handling
@@ -157,60 +161,60 @@ JoystickTestDialog::JoystickTestDialog(JoystickGui& gui, Joystick& joystick_, bo
         QGridLayout* gridLayout = new QGridLayout(container);
         
         // Don't add stick1_widget again since we already did it above
-        gridLayout->addWidget(&rudder_widget, 1, 0);
-        gridLayout->addWidget(&throttle_widget, 0, 1);
+        gridLayout->addWidget(rudder_widget, 1, 0);
+        gridLayout->addWidget(throttle_widget, 0, 1);
         
         stick_hbox.addWidget(container, 1, Qt::AlignCenter);
-        stick_hbox.addWidget(&stick3_widget, 1, Qt::AlignCenter);
+        stick_hbox.addWidget(stick3_widget, 1, Qt::AlignCenter);
         
         // Don't connect stick1_widget again
-        axis_callbacks[2] = [this](double val) { rudder_widget.setPos(val); };
-        axis_callbacks[3] = [this](double val) { throttle_widget.setPos(val); };
-        raw_value_callbacks[4] = [this](int val) { stick3_widget.setRawX(val); };
-        raw_value_callbacks[5] = [this](int val) { stick3_widget.setRawY(val); };
+        axis_callbacks[2] = [this](double val) { rudder_widget->setPos(val); };
+        axis_callbacks[3] = [this](double val) { throttle_widget->setPos(val); };
+        raw_value_callbacks[4] = [this](int val) { stick3_widget->setRawX(val); };
+        raw_value_callbacks[5] = [this](int val) { stick3_widget->setRawY(val); };
         break;
     }
     
     case 8: // Dual Analog Gamepad + Analog Trigger
         // Don't add stick1_widget again
-        stick_hbox.addWidget(&stick2_widget, 1, Qt::AlignCenter);
-        stick_hbox.addWidget(&stick3_widget, 1, Qt::AlignCenter);
-        stick_hbox.addWidget(&left_trigger_widget, 1, Qt::AlignCenter);
-        stick_hbox.addWidget(&right_trigger_widget, 1, Qt::AlignCenter);
+        stick_hbox.addWidget(stick2_widget, 1, Qt::AlignCenter);
+        stick_hbox.addWidget(stick3_widget, 1, Qt::AlignCenter);
+        stick_hbox.addWidget(left_trigger_widget, 1, Qt::AlignCenter);
+        stick_hbox.addWidget(right_trigger_widget, 1, Qt::AlignCenter);
         
         // Don't connect stick1_widget again
-        raw_value_callbacks[2] = [this](int val) { stick2_widget.setRawX(val); };
-        raw_value_callbacks[3] = [this](int val) { stick2_widget.setRawY(val); };
-        raw_value_callbacks[6] = [this](int val) { stick3_widget.setRawX(val); };
-        raw_value_callbacks[7] = [this](int val) { stick3_widget.setRawY(val); };
-        axis_callbacks[4] = [this](double val) { left_trigger_widget.setPos(val); };
-        axis_callbacks[5] = [this](double val) { right_trigger_widget.setPos(val); };
+        raw_value_callbacks[2] = [this](int val) { stick2_widget->setRawX(val); };
+        raw_value_callbacks[3] = [this](int val) { stick2_widget->setRawY(val); };
+        raw_value_callbacks[6] = [this](int val) { stick3_widget->setRawX(val); };
+        raw_value_callbacks[7] = [this](int val) { stick3_widget->setRawY(val); };
+        axis_callbacks[4] = [this](double val) { left_trigger_widget->setPos(val); };
+        axis_callbacks[5] = [this](double val) { right_trigger_widget->setPos(val); };
         break;
     
     case 7: // Dual Analog Gamepad DragonRise Inc. Generic USB Joystick
         // Don't add stick1_widget again
-        stick_hbox.addWidget(&stick2_widget, 1, Qt::AlignCenter);
-        stick_hbox.addWidget(&stick3_widget, 1, Qt::AlignCenter);
+        stick_hbox.addWidget(stick2_widget, 1, Qt::AlignCenter);
+        stick_hbox.addWidget(stick3_widget, 1, Qt::AlignCenter);
         
         // Don't connect stick1_widget again
-        raw_value_callbacks[3] = [this](int val) { stick2_widget.setRawX(val); };
-        raw_value_callbacks[4] = [this](int val) { stick2_widget.setRawY(val); };
-        raw_value_callbacks[5] = [this](int val) { stick3_widget.setRawX(val); };
-        raw_value_callbacks[6] = [this](int val) { stick3_widget.setRawY(val); };
+        raw_value_callbacks[3] = [this](int val) { stick2_widget->setRawX(val); };
+        raw_value_callbacks[4] = [this](int val) { stick2_widget->setRawY(val); };
+        raw_value_callbacks[5] = [this](int val) { stick3_widget->setRawX(val); };
+        raw_value_callbacks[6] = [this](int val) { stick3_widget->setRawY(val); };
         break;
     
     case 27: // Playstation 3 Controller
         // Don't add stick1_widget again
-        stick_hbox.addWidget(&stick2_widget, 1, Qt::AlignCenter);
+        stick_hbox.addWidget(stick2_widget, 1, Qt::AlignCenter);
         // Not using stick3 for now, as the dpad is 4 axis on the PS3, not 2 (one for each direction)
-        stick_hbox.addWidget(&left_trigger_widget, 1, Qt::AlignCenter);
-        stick_hbox.addWidget(&right_trigger_widget, 1, Qt::AlignCenter);
+        stick_hbox.addWidget(left_trigger_widget, 1, Qt::AlignCenter);
+        stick_hbox.addWidget(right_trigger_widget, 1, Qt::AlignCenter);
         
         // Don't connect stick1_widget again
-        raw_value_callbacks[2] = [this](int val) { stick2_widget.setRawX(val); };
-        raw_value_callbacks[3] = [this](int val) { stick2_widget.setRawY(val); };
-        axis_callbacks[12] = [this](double val) { left_trigger_widget.setPos(val); };
-        axis_callbacks[13] = [this](double val) { right_trigger_widget.setPos(val); };
+        raw_value_callbacks[2] = [this](int val) { stick2_widget->setRawX(val); };
+        raw_value_callbacks[3] = [this](int val) { stick2_widget->setRawY(val); };
+        axis_callbacks[12] = [this](double val) { left_trigger_widget->setPos(val); };
+        axis_callbacks[13] = [this](double val) { right_trigger_widget->setPos(val); };
         break;
     
     default:
@@ -238,28 +242,55 @@ JoystickTestDialog::JoystickTestDialog(JoystickGui& gui, Joystick& joystick_, bo
     close_button.setFocus();
 }
 
+JoystickTestDialog::~JoystickTestDialog()
+{
+    // Clean up dynamically allocated widgets
+    delete stick1_widget;
+    delete stick2_widget;
+    delete stick3_widget;
+    delete rudder_widget;
+    delete throttle_widget;
+    delete left_trigger_widget;
+    delete right_trigger_widget;
+    
+    // The other widgets (buttons, progress bars, labels) are added to layouts
+    // and will be deleted automatically by Qt's parent-child mechanism
+}
+
 void
 JoystickTestDialog::axisMove(int number, int value)
 {
-    // Update progress bar
-    axes.at(number)->setValue((value + 32767) / 655.34);
-    
-    // Update progress bar text with the value
-    QString strValue = QString::number(value);
-    axes.at(number)->setFormat(strValue);
-    
-    // Update value label
-    axis_value_labels.at(number)->setText(strValue);
-    
-    // Update other widgets
-    axis_callbacks[number](value / 32767.0);
-    raw_value_callbacks[number](value);
+    // Check that the number is within range
+    if (number >= 0 && number < axes.size()) {
+        // Update progress bar
+        axes.at(number)->setValue((value + 32767) / 655.34);
+        
+        // Update progress bar text with the value
+        QString strValue = QString::number(value);
+        axes.at(number)->setFormat(strValue);
+        
+        // Update value label
+        if (number < axis_value_labels.size()) {
+            axis_value_labels.at(number)->setText(strValue);
+        }
+        
+        // Update other widgets
+        if (number < axis_callbacks.size()) {
+            axis_callbacks[number](value / 32767.0);
+        }
+        
+        if (number < raw_value_callbacks.size()) {
+            raw_value_callbacks[number](value);
+        }
+    }
 }
 
 void
 JoystickTestDialog::buttonMove(int number, bool value)
 {
-    buttons.at(number)->setDown(value);
+    if (number >= 0 && number < buttons.size()) {
+        buttons.at(number)->setDown(value);
+    }
 }
 
 void

@@ -30,14 +30,15 @@
 #include <QScrollArea>
 #include <QFrame>
 #include <QVector>
+#include <functional>
 
-#include "widgets/axis_widget.h"
-#include "widgets/rudder_widget.h"
-#include "widgets/throttle_widget.h"
-
+// Forward declarations to avoid circular dependencies
 class Joystick;
 class JoystickGui;
 class ButtonWidget;
+class AxisWidget;
+class RudderWidget;
+class ThrottleWidget;
 
 class JoystickTestDialog : public QDialog
 {
@@ -65,15 +66,16 @@ private:
     QPushButton close_button;
     QHBoxLayout buttonbox;
 
-    AxisWidget stick1_widget;
-    AxisWidget stick2_widget;
-    AxisWidget stick3_widget;
+    // Changed to pointers for forward-declared classes
+    AxisWidget* stick1_widget;
+    AxisWidget* stick2_widget;
+    AxisWidget* stick3_widget;
 
-    RudderWidget rudder_widget;
-    ThrottleWidget throttle_widget;
+    RudderWidget* rudder_widget;
+    ThrottleWidget* throttle_widget;
 
-    ThrottleWidget left_trigger_widget;
-    ThrottleWidget right_trigger_widget;
+    ThrottleWidget* left_trigger_widget;
+    ThrottleWidget* right_trigger_widget;
 
     QVector<QProgressBar*> axes;
     QVector<ButtonWidget*> buttons;
@@ -91,6 +93,7 @@ private slots:
 
 public:
     JoystickTestDialog(JoystickGui& gui, Joystick& joystick, bool simple_ui);
+    ~JoystickTestDialog(); // Need a destructor to clean up pointers
 };
 
 #endif // JSTEST_QT_JOYSTICK_TEST_DIALOG_H

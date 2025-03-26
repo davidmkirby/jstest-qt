@@ -34,6 +34,7 @@
 #include <linux/joystick.h>
 #include <QFile>
 #include <QDir>
+#include <QDebug>
 
 #include "utils/evdev_helper.h"
 
@@ -41,7 +42,8 @@ Joystick::Joystick(const std::string& filename_)
     : QObject(nullptr),
       filename(filename_)
 {
-    if ((fd = open(filename.c_str(), O_RDONLY)) < 0)
+    // Use non-blocking mode for better compatibility with Wayland
+    if ((fd = open(filename.c_str(), O_RDONLY | O_NONBLOCK)) < 0)
     {
         QString errorMsg = QString("%1: %2").arg(QString::fromStdString(filename)).arg(strerror(errno));
         throw std::runtime_error(errorMsg.toStdString());
@@ -74,14 +76,36 @@ Joystick::Joystick(const std::string& filename_)
 
     orig_calibration_data = getCalibration();
 
+    // Create QSocketNotifier with more robust error handling
     notifier = new QSocketNotifier(fd, QSocketNotifier::Read, this);
-    connect(notifier, &QSocketNotifier::activated, this, &Joystick::onSocketActivated);
+    if (!notifier) {
+        close(fd);
+        throw std::runtime_error("Failed to create socket notifier");
+    }
+    
+    // Use direct connection for better reliability with Wayland
+    connect(notifier, &QSocketNotifier::activated, this, &Joystick::onSocketActivated, 
+            Qt::DirectConnection);
+            
+    // Make sure the notifier is enabled
+    notifier->setEnabled(true);
+    
+    qDebug() << "Joystick initialized:" << name << "with" << axis_count << "axes and" << button_count << "buttons";
 }
 
 Joystick::~Joystick()
 {
-    delete notifier;
-    close(fd);
+    // Disable notifier before destruction to prevent activated signal during deletion
+    if (notifier) {
+        notifier->setEnabled(false);
+        delete notifier;
+        notifier = nullptr;
+    }
+    
+    if (fd >= 0) {
+        close(fd);
+        fd = -1;
+    }
 }
 
 void
@@ -97,30 +121,39 @@ Joystick::update()
 {
     struct js_event event;
 
-    ssize_t len = read(fd, &event, sizeof(event));
-
-    if (len < 0)
-    {
-        QString errorMsg = QString("%1: %2").arg(QString::fromStdString(filename)).arg(strerror(errno));
-        throw std::runtime_error(errorMsg.toStdString());
-    }
-    else if (len == sizeof(event))
-    { // ok
-        if (event.type & JS_EVENT_AXIS)
-        {
-            //std::cout << "Axis: " << (int)event.number << " -> " << (int)event.value << std::endl;
-            axis_state[event.number] = event.value;
-            emit axisChanged(event.number, event.value);
+    // We might get multiple events, process all of them
+    while (true) {
+        ssize_t len = read(fd, &event, sizeof(event));
+        
+        if (len < 0) {
+            // EAGAIN is expected with non-blocking mode when no more events
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                break;
+            }
+            
+            QString errorMsg = QString("%1: %2").arg(QString::fromStdString(filename)).arg(strerror(errno));
+            qWarning() << "Error reading from joystick:" << errorMsg;
+            throw std::runtime_error(errorMsg.toStdString());
         }
-        else if (event.type & JS_EVENT_BUTTON)
-        {
-            //std::cout << "Button: " << (int)event.number << " -> " << (int)event.value << std::endl;
-            emit buttonChanged(event.number, event.value);
+        else if (len == 0) {
+            // End of file
+            break;
         }
-    }
-    else
-    {
-        throw std::runtime_error("Joystick::update(): unknown read error");
+        else if (len == sizeof(event)) {
+            // Process the event
+            if (event.type & JS_EVENT_AXIS) {
+                if (event.number < axis_state.size()) {
+                    axis_state[event.number] = event.value;
+                    emit axisChanged(event.number, event.value);
+                }
+            }
+            else if (event.type & JS_EVENT_BUTTON) {
+                emit buttonChanged(event.number, event.value);
+            }
+        }
+        else {
+            throw std::runtime_error("Joystick::update(): incomplete read");
+        }
     }
 }
 
@@ -218,7 +251,7 @@ Joystick::getJoysticks()
                                     QString jsPath = QString("js%1").arg(i);
                                     if (jsDevDir.exists(jsPath)) {
                                         QString fullJsPath = jsDevDir.filePath(jsPath);
-                                        int js_fd = open(fullJsPath.toStdString().c_str(), O_RDONLY);
+                                        int js_fd = open(fullJsPath.toStdString().c_str(), O_RDONLY | O_NONBLOCK);
                                         if (js_fd >= 0) {
                                             char js_name[256] = "";
                                             if (ioctl(js_fd, JSIOCGNAME(sizeof(js_name)), js_name) >= 0) {

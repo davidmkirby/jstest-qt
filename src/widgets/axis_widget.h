@@ -21,6 +21,7 @@
 #define JSTEST_QT_AXIS_WIDGET_H
 
 #include <QWidget>
+#include <QFontDatabase>
 
 class AxisWidget : public QWidget
 {
@@ -42,7 +43,7 @@ public slots:
     void setXAxis(double x);
     void setYAxis(double y);
     
-    // New methods to set raw values
+    // Methods to set raw values
     void setRawX(int raw_x_value);
     void setRawY(int raw_y_value);
 };

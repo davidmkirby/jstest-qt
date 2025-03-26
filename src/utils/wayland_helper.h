@@ -60,11 +60,18 @@ public:
         
         struct udev* udev = udev_new();
         if (!udev) {
+            qWarning() << "Failed to initialize udev";
             return devices;
         }
 
         struct udev_enumerate* enumerate = udev_enumerate_new(udev);
         udev_enumerate_add_match_subsystem(enumerate, "input");
+        
+        // Add specific property match for joysticks
+        if (type == JOYSTICK) {
+            udev_enumerate_add_match_property(enumerate, "ID_INPUT_JOYSTICK", "1");
+        }
+        
         udev_enumerate_scan_devices(enumerate);
         
         struct udev_list_entry* devices_list = udev_enumerate_get_list_entry(enumerate);

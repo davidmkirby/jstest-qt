@@ -25,6 +25,7 @@
 #include <QDir>
 #include <QMessageBox>
 #include <QProcess>
+#include <QDebug>
 
 #include "joystick.h"
 #include "dialogs/joystick_test_dialog.h"
@@ -41,12 +42,11 @@ JoystickGui::JoystickGui(std::unique_ptr<Joystick> joystick, bool simple_ui, QWi
     m_joystick(std::move(joystick)),
     m_test_dialog()
 {
+    // Create test dialog as a new top-level window
     m_test_dialog = std::make_unique<JoystickTestDialog>(*this, *m_joystick, simple_ui);
-    if (parent) {
-        m_test_dialog->setParent(parent);
-    }
-
-    m_test_dialog->show();
+    
+    // Force dialog to be a separate window regardless of parent
+    m_test_dialog->setWindowFlags(Qt::Window);
 }
 
 void
@@ -72,12 +72,6 @@ JoystickApp::JoystickApp(int& argc, char** argv) :
     m_instance = this;
     setApplicationName("jstest-qt");
     setApplicationVersion("0.1.1");
-    
-    // Set environment variables for Wayland
-    // Only set the platform if not already specified
-    if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) {
-        qputenv("QT_QPA_PLATFORM", "wayland");
-    }
 }
 
 JoystickApp::~JoystickApp()
@@ -90,26 +84,41 @@ JoystickApp::showDevicePropertyDialog(const QString& filename, QWidget* parent)
     auto it = m_joystick_guis.find(filename);
     if (it != m_joystick_guis.end()) {
         JoystickTestDialog* dialog = it.value()->getTestDialog();
+        dialog->raise();
         dialog->activateWindow();
         return dialog;
     } else {
         try {
+            // Add debug output
+            qDebug() << "Opening joystick:" << filename;
+            
+            // Create joystick
             std::unique_ptr<Joystick> joystick(new Joystick(filename.toStdString()));
-            std::shared_ptr<JoystickGui> gui = std::make_shared<JoystickGui>(std::move(joystick), m_simple_ui, nullptr); // Note: parent set to nullptr
-
+            
+            // IMPORTANT: Pass nullptr as parent to ensure it's a top-level window
+            std::shared_ptr<JoystickGui> gui = std::make_shared<JoystickGui>(std::move(joystick), m_simple_ui, nullptr);
+            
             JoystickTestDialog* dialog = gui->getTestDialog();
-            dialog->setAttribute(Qt::WA_DeleteOnClose, false); // Prevent auto-delete
-            dialog->setWindowModality(Qt::NonModal); // Make it a non-modal window
-            dialog->show(); // Show it immediately
-
-            connect(dialog, &QDialog::finished, this, [this, filename]() {
-                m_joystick_guis.remove(filename);
-            });
-
+            
+            // Ensure dialog is a separate top-level window
+            dialog->setWindowFlags(Qt::Window);
+            
+            // Show the dialog as an independent window
+            dialog->show();
+            dialog->raise();
+            dialog->activateWindow();
+            
+            // Ensure proper cleanup when the dialog is closed
+            QObject::connect(dialog, &QDialog::finished, 
+                [this, filename]() {
+                    qDebug() << "Dialog finished for:" << filename;
+                    m_joystick_guis.remove(filename);
+                });
+            
             m_joystick_guis[filename] = gui;
             return dialog;
         } catch (const std::exception& e) {
-            QMessageBox::critical(nullptr, "Error", QString("Error: %1").arg(e.what()));
+            QMessageBox::critical(parent, "Error", QString("Error: %1").arg(e.what()));
             return nullptr;
         }
     }
@@ -210,6 +219,11 @@ int main(int argc, char** argv)
         // Set environment variables before QApplication is constructed
         if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) {
             qputenv("QT_QPA_PLATFORM", "wayland");
+        }
+        
+        // Optional: Add fallback in case Wayland isn't available
+        if (qEnvironmentVariableIsSet("DISPLAY") && qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY")) {
+            qputenv("QT_QPA_PLATFORM", "xcb");
         }
         
         JoystickApp app(argc, argv);

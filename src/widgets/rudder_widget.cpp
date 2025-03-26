@@ -20,12 +20,20 @@
 #include "widgets/rudder_widget.h"
 
 #include <QPainter>
+#include <QPainterPath>
 
 RudderWidget::RudderWidget(int width, int height, QWidget* parent)
     : QWidget(parent),
       pos(0.0)
 {
     setFixedSize(width, height);
+    
+    // Set widget attributes for better rendering on Wayland
+    setAttribute(Qt::WA_OpaquePaintEvent, false);
+    setAttribute(Qt::WA_TranslucentBackground, false);
+    
+    // Use a proper size policy
+    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 }
 
 void
@@ -44,8 +52,10 @@ RudderWidget::paintEvent(QPaintEvent* event)
     painter.translate(5, 5);
     
     // Outer Rectangle
+    QPainterPath rectPath;
+    rectPath.addRect(0, 0, w, h);
     painter.setPen(Qt::black);
-    painter.drawRect(0, 0, w, h);
+    painter.drawPath(rectPath);
     
     // Center line
     painter.setPen(QPen(QColor(0, 0, 0, 128), 0.5));
